@@ -8,7 +8,7 @@ const LS_KEY = "marvel-guide-progress-v1";
 let GUIDE = { collections: [], side_tracks: [], eras: [] };
 let ERA_BY_ID = {};
 let progress = {};
-let viewMode = "fast";
+let viewMode = "full";
 try { progress = JSON.parse(localStorage.getItem(LS_KEY) || "{}"); } catch (e) { progress = {}; }
 
 const $ = (id) => document.getElementById(id);
@@ -84,19 +84,21 @@ function authorLine(c) {
   return first;
 }
 
-function tierWord(c) {
-  if (c.tier === "must-read") return "Fast track";
-  if (c.tier === "expert-depth") return "Extra";
-  if (c.tier === "completionist") return "For completists";
-  return "";
+function displayTitle(c) {
+  // The year in a title is the year that series started, not when the
+  // issues came out. It lives in Details so the card titles stay clean.
+  return String(c.guide_title || "").replace(/ \(\d{4}\)/g, "");
 }
 
 function detailsHTML(c) {
   const parts = [];
   const author = authorLine(c);
   if (author) parts.push(`<p class="detail-line">${esc(author)}</p>`);
-  const tier = tierWord(c);
-  if (tier) parts.push(`<p class="detail-line">List: ${esc(tier)}</p>`);
+  if (c.year) parts.push(`<p class="detail-line">Series started: ${esc(c.year)}</p>`);
+  if (c.continuity_note) parts.push(`<p class="detail-line">${esc(c.continuity_note)}</p>`);
+  if (Array.isArray(c.introductions) && c.introductions.length) {
+    parts.push(`<p class="detail-line">Introductions: ${esc(c.introductions.join("; "))}</p>`);
+  }
   const issues = Array.isArray(c.issues) ? c.issues : [];
   if (issues.length) {
     const items = issues.map(i =>
@@ -118,7 +120,6 @@ function cardHTML(c, num) {
     ? `<div class="card-media"><img class="cover" src="${esc(c.cover_url)}" alt="" loading="lazy" decoding="async"></div>` : "";
   const count = issueCount(c);
   const countLine = count ? `<p class="count-line">${count} ${count === 1 ? "issue" : "issues"}</p>` : "";
-  const eventLine = c.event ? `<p class="event-line">Part of: ${esc(c.event)}</p>` : "";
   const readHref = readAppLink(c);
   const readBtn = readHref
     ? `<a class="start-link" href="${esc(readHref)}">Read in the app</a>`
@@ -127,10 +128,9 @@ function cardHTML(c, num) {
     <div class="card-body">
       <div class="card-top">
         <span class="stop-num">${esc(num)}</span>
-        <h3>${esc(c.guide_title)}</h3>
+        <h3>${esc(displayTitle(c))}</h3>
       </div>
       ${countLine}
-      ${eventLine}
       <div class="read-row">
         ${readBtn}
         <label class="done-row"><input type="checkbox" data-id="${esc(c.id)}" ${progress[c.id] ? "checked" : ""}> Done</label>
@@ -203,11 +203,13 @@ function render() {
     }
   }
   $("empty").hidden = shown > 0;
-  const ftAll = GUIDE.collections.filter(c => c.tier === "must-read");
-  const ftDone = ftAll.filter(c => progress[c.id]).length;
-  const ftPct = ftAll.length ? Math.round(100 * ftDone / ftAll.length) : 0;
-  $("progress-line").textContent = `You finished ${ftDone} of ${ftAll.length} stops.`;
-  $("progress-fill").style.width = ftPct + "%";
+  const inView = viewMode === "fast"
+    ? GUIDE.collections.filter(c => c.tier === "must-read")
+    : GUIDE.collections;
+  const doneInView = inView.filter(c => progress[c.id]).length;
+  const viewPct = inView.length ? Math.round(100 * doneInView / inView.length) : 0;
+  $("progress-line").textContent = `You finished ${doneInView} of ${inView.length} stops.`;
+  $("progress-fill").style.width = viewPct + "%";
   bindCheckboxes(list);
 }
 
